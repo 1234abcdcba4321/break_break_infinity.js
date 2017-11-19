@@ -1,0 +1,851 @@
+var bigInt=function(undefined){"use strict";var BASE=1e7,LOG_BASE=7,MAX_INT=9007199254740992,MAX_INT_ARR=smallToArray(MAX_INT),LOG_MAX_INT=Math.log(MAX_INT);function Integer(v,radix){if(typeof v==="undefined")return Integer[0];if(typeof radix!=="undefined")return+radix===10?parseValue(v):parseBase(v,radix);return parseValue(v)}function BigInteger(value,sign){this.value=value;this.sign=sign;this.isSmall=false}BigInteger.prototype=Object.create(Integer.prototype);function SmallInteger(value){this.value=value;this.sign=value<0;this.isSmall=true}SmallInteger.prototype=Object.create(Integer.prototype);function isPrecise(n){return-MAX_INT<n&&n<MAX_INT}function smallToArray(n){if(n<1e7)return[n];if(n<1e14)return[n%1e7,Math.floor(n/1e7)];return[n%1e7,Math.floor(n/1e7)%1e7,Math.floor(n/1e14)]}function arrayToSmall(arr){trim(arr);var length=arr.length;if(length<4&&compareAbs(arr,MAX_INT_ARR)<0){switch(length){case 0:return 0;case 1:return arr[0];case 2:return arr[0]+arr[1]*BASE;default:return arr[0]+(arr[1]+arr[2]*BASE)*BASE}}return arr}function trim(v){var i=v.length;while(v[--i]===0);v.length=i+1}function createArray(length){var x=new Array(length);var i=-1;while(++i<length){x[i]=0}return x}function truncate(n){if(n>0)return Math.floor(n);return Math.ceil(n)}function add(a,b){var l_a=a.length,l_b=b.length,r=new Array(l_a),carry=0,base=BASE,sum,i;for(i=0;i<l_b;i++){sum=a[i]+b[i]+carry;carry=sum>=base?1:0;r[i]=sum-carry*base}while(i<l_a){sum=a[i]+carry;carry=sum===base?1:0;r[i++]=sum-carry*base}if(carry>0)r.push(carry);return r}function addAny(a,b){if(a.length>=b.length)return add(a,b);return add(b,a)}function addSmall(a,carry){var l=a.length,r=new Array(l),base=BASE,sum,i;for(i=0;i<l;i++){sum=a[i]-base+carry;carry=Math.floor(sum/base);r[i]=sum-carry*base;carry+=1}while(carry>0){r[i++]=carry%base;carry=Math.floor(carry/base)}return r}BigInteger.prototype.add=function(v){var n=parseValue(v);if(this.sign!==n.sign){return this.subtract(n.negate())}var a=this.value,b=n.value;if(n.isSmall){return new BigInteger(addSmall(a,Math.abs(b)),this.sign)}return new BigInteger(addAny(a,b),this.sign)};BigInteger.prototype.plus=BigInteger.prototype.add;SmallInteger.prototype.add=function(v){var n=parseValue(v);var a=this.value;if(a<0!==n.sign){return this.subtract(n.negate())}var b=n.value;if(n.isSmall){if(isPrecise(a+b))return new SmallInteger(a+b);b=smallToArray(Math.abs(b))}return new BigInteger(addSmall(b,Math.abs(a)),a<0)};SmallInteger.prototype.plus=SmallInteger.prototype.add;function subtract(a,b){var a_l=a.length,b_l=b.length,r=new Array(a_l),borrow=0,base=BASE,i,difference;for(i=0;i<b_l;i++){difference=a[i]-borrow-b[i];if(difference<0){difference+=base;borrow=1}else borrow=0;r[i]=difference}for(i=b_l;i<a_l;i++){difference=a[i]-borrow;if(difference<0)difference+=base;else{r[i++]=difference;break}r[i]=difference}for(;i<a_l;i++){r[i]=a[i]}trim(r);return r}function subtractAny(a,b,sign){var value;if(compareAbs(a,b)>=0){value=subtract(a,b)}else{value=subtract(b,a);sign=!sign}value=arrayToSmall(value);if(typeof value==="number"){if(sign)value=-value;return new SmallInteger(value)}return new BigInteger(value,sign)}function subtractSmall(a,b,sign){var l=a.length,r=new Array(l),carry=-b,base=BASE,i,difference;for(i=0;i<l;i++){difference=a[i]+carry;carry=Math.floor(difference/base);difference%=base;r[i]=difference<0?difference+base:difference}r=arrayToSmall(r);if(typeof r==="number"){if(sign)r=-r;return new SmallInteger(r)}return new BigInteger(r,sign)}BigInteger.prototype.subtract=function(v){var n=parseValue(v);if(this.sign!==n.sign){return this.add(n.negate())}var a=this.value,b=n.value;if(n.isSmall)return subtractSmall(a,Math.abs(b),this.sign);return subtractAny(a,b,this.sign)};BigInteger.prototype.minus=BigInteger.prototype.subtract;SmallInteger.prototype.subtract=function(v){var n=parseValue(v);var a=this.value;if(a<0!==n.sign){return this.add(n.negate())}var b=n.value;if(n.isSmall){return new SmallInteger(a-b)}return subtractSmall(b,Math.abs(a),a>=0)};SmallInteger.prototype.minus=SmallInteger.prototype.subtract;BigInteger.prototype.negate=function(){return new BigInteger(this.value,!this.sign)};SmallInteger.prototype.negate=function(){var sign=this.sign;var small=new SmallInteger(-this.value);small.sign=!sign;return small};BigInteger.prototype.abs=function(){return new BigInteger(this.value,false)};SmallInteger.prototype.abs=function(){return new SmallInteger(Math.abs(this.value))};function multiplyLong(a,b){var a_l=a.length,b_l=b.length,l=a_l+b_l,r=createArray(l),base=BASE,product,carry,i,a_i,b_j;for(i=0;i<a_l;++i){a_i=a[i];for(var j=0;j<b_l;++j){b_j=b[j];product=a_i*b_j+r[i+j];carry=Math.floor(product/base);r[i+j]=product-carry*base;r[i+j+1]+=carry}}trim(r);return r}function multiplySmall(a,b){var l=a.length,r=new Array(l),base=BASE,carry=0,product,i;for(i=0;i<l;i++){product=a[i]*b+carry;carry=Math.floor(product/base);r[i]=product-carry*base}while(carry>0){r[i++]=carry%base;carry=Math.floor(carry/base)}return r}function shiftLeft(x,n){var r=[];while(n-- >0)r.push(0);return r.concat(x)}function multiplyKaratsuba(x,y){var n=Math.max(x.length,y.length);if(n<=30)return multiplyLong(x,y);n=Math.ceil(n/2);var b=x.slice(n),a=x.slice(0,n),d=y.slice(n),c=y.slice(0,n);var ac=multiplyKaratsuba(a,c),bd=multiplyKaratsuba(b,d),abcd=multiplyKaratsuba(addAny(a,b),addAny(c,d));var product=addAny(addAny(ac,shiftLeft(subtract(subtract(abcd,ac),bd),n)),shiftLeft(bd,2*n));trim(product);return product}function useKaratsuba(l1,l2){return-.012*l1-.012*l2+15e-6*l1*l2>0}BigInteger.prototype.multiply=function(v){var n=parseValue(v),a=this.value,b=n.value,sign=this.sign!==n.sign,abs;if(n.isSmall){if(b===0)return Integer[0];if(b===1)return this;if(b===-1)return this.negate();abs=Math.abs(b);if(abs<BASE){return new BigInteger(multiplySmall(a,abs),sign)}b=smallToArray(abs)}if(useKaratsuba(a.length,b.length))return new BigInteger(multiplyKaratsuba(a,b),sign);return new BigInteger(multiplyLong(a,b),sign)};BigInteger.prototype.times=BigInteger.prototype.multiply;function multiplySmallAndArray(a,b,sign){if(a<BASE){return new BigInteger(multiplySmall(b,a),sign)}return new BigInteger(multiplyLong(b,smallToArray(a)),sign)}SmallInteger.prototype._multiplyBySmall=function(a){if(isPrecise(a.value*this.value)){return new SmallInteger(a.value*this.value)}return multiplySmallAndArray(Math.abs(a.value),smallToArray(Math.abs(this.value)),this.sign!==a.sign)};BigInteger.prototype._multiplyBySmall=function(a){if(a.value===0)return Integer[0];if(a.value===1)return this;if(a.value===-1)return this.negate();return multiplySmallAndArray(Math.abs(a.value),this.value,this.sign!==a.sign)};SmallInteger.prototype.multiply=function(v){return parseValue(v)._multiplyBySmall(this)};SmallInteger.prototype.times=SmallInteger.prototype.multiply;function square(a){var l=a.length,r=createArray(l+l),base=BASE,product,carry,i,a_i,a_j;for(i=0;i<l;i++){a_i=a[i];for(var j=0;j<l;j++){a_j=a[j];product=a_i*a_j+r[i+j];carry=Math.floor(product/base);r[i+j]=product-carry*base;r[i+j+1]+=carry}}trim(r);return r}BigInteger.prototype.square=function(){return new BigInteger(square(this.value),false)};SmallInteger.prototype.square=function(){var value=this.value*this.value;if(isPrecise(value))return new SmallInteger(value);return new BigInteger(square(smallToArray(Math.abs(this.value))),false)};function divMod1(a,b){var a_l=a.length,b_l=b.length,base=BASE,result=createArray(b.length),divisorMostSignificantDigit=b[b_l-1],lambda=Math.ceil(base/(2*divisorMostSignificantDigit)),remainder=multiplySmall(a,lambda),divisor=multiplySmall(b,lambda),quotientDigit,shift,carry,borrow,i,l,q;if(remainder.length<=a_l)remainder.push(0);divisor.push(0);divisorMostSignificantDigit=divisor[b_l-1];for(shift=a_l-b_l;shift>=0;shift--){quotientDigit=base-1;if(remainder[shift+b_l]!==divisorMostSignificantDigit){quotientDigit=Math.floor((remainder[shift+b_l]*base+remainder[shift+b_l-1])/divisorMostSignificantDigit)}carry=0;borrow=0;l=divisor.length;for(i=0;i<l;i++){carry+=quotientDigit*divisor[i];q=Math.floor(carry/base);borrow+=remainder[shift+i]-(carry-q*base);carry=q;if(borrow<0){remainder[shift+i]=borrow+base;borrow=-1}else{remainder[shift+i]=borrow;borrow=0}}while(borrow!==0){quotientDigit-=1;carry=0;for(i=0;i<l;i++){carry+=remainder[shift+i]-base+divisor[i];if(carry<0){remainder[shift+i]=carry+base;carry=0}else{remainder[shift+i]=carry;carry=1}}borrow+=carry}result[shift]=quotientDigit}remainder=divModSmall(remainder,lambda)[0];return[arrayToSmall(result),arrayToSmall(remainder)]}function divMod2(a,b){var a_l=a.length,b_l=b.length,result=[],part=[],base=BASE,guess,xlen,highx,highy,check;while(a_l){part.unshift(a[--a_l]);trim(part);if(compareAbs(part,b)<0){result.push(0);continue}xlen=part.length;highx=part[xlen-1]*base+part[xlen-2];highy=b[b_l-1]*base+b[b_l-2];if(xlen>b_l){highx=(highx+1)*base}guess=Math.ceil(highx/highy);do{check=multiplySmall(b,guess);if(compareAbs(check,part)<=0)break;guess--}while(guess);result.push(guess);part=subtract(part,check)}result.reverse();return[arrayToSmall(result),arrayToSmall(part)]}function divModSmall(value,lambda){var length=value.length,quotient=createArray(length),base=BASE,i,q,remainder,divisor;remainder=0;for(i=length-1;i>=0;--i){divisor=remainder*base+value[i];q=truncate(divisor/lambda);remainder=divisor-q*lambda;quotient[i]=q|0}return[quotient,remainder|0]}function divModAny(self,v){var value,n=parseValue(v);var a=self.value,b=n.value;var quotient;if(b===0)throw new Error("Cannot divide by zero");if(self.isSmall){if(n.isSmall){return[new SmallInteger(truncate(a/b)),new SmallInteger(a%b)]}return[Integer[0],self]}if(n.isSmall){if(b===1)return[self,Integer[0]];if(b==-1)return[self.negate(),Integer[0]];var abs=Math.abs(b);if(abs<BASE){value=divModSmall(a,abs);quotient=arrayToSmall(value[0]);var remainder=value[1];if(self.sign)remainder=-remainder;if(typeof quotient==="number"){if(self.sign!==n.sign)quotient=-quotient;return[new SmallInteger(quotient),new SmallInteger(remainder)]}return[new BigInteger(quotient,self.sign!==n.sign),new SmallInteger(remainder)]}b=smallToArray(abs)}var comparison=compareAbs(a,b);if(comparison===-1)return[Integer[0],self];if(comparison===0)return[Integer[self.sign===n.sign?1:-1],Integer[0]];if(a.length+b.length<=200)value=divMod1(a,b);else value=divMod2(a,b);quotient=value[0];var qSign=self.sign!==n.sign,mod=value[1],mSign=self.sign;if(typeof quotient==="number"){if(qSign)quotient=-quotient;quotient=new SmallInteger(quotient)}else quotient=new BigInteger(quotient,qSign);if(typeof mod==="number"){if(mSign)mod=-mod;mod=new SmallInteger(mod)}else mod=new BigInteger(mod,mSign);return[quotient,mod]}BigInteger.prototype.divmod=function(v){var result=divModAny(this,v);return{quotient:result[0],remainder:result[1]}};SmallInteger.prototype.divmod=BigInteger.prototype.divmod;BigInteger.prototype.divide=function(v){return divModAny(this,v)[0]};SmallInteger.prototype.over=SmallInteger.prototype.divide=BigInteger.prototype.over=BigInteger.prototype.divide;BigInteger.prototype.mod=function(v){return divModAny(this,v)[1]};SmallInteger.prototype.remainder=SmallInteger.prototype.mod=BigInteger.prototype.remainder=BigInteger.prototype.mod;BigInteger.prototype.pow=function(v){var n=parseValue(v),a=this.value,b=n.value,value,x,y;if(b===0)return Integer[1];if(a===0)return Integer[0];if(a===1)return Integer[1];if(a===-1)return n.isEven()?Integer[1]:Integer[-1];if(n.sign){return Integer[0]}if(!n.isSmall)throw new Error("The exponent "+n.toString()+" is too large.");if(this.isSmall){if(isPrecise(value=Math.pow(a,b)))return new SmallInteger(truncate(value))}x=this;y=Integer[1];while(true){if(b&1===1){y=y.times(x);--b}if(b===0)break;b/=2;x=x.square()}return y};SmallInteger.prototype.pow=BigInteger.prototype.pow;BigInteger.prototype.modPow=function(exp,mod){exp=parseValue(exp);mod=parseValue(mod);if(mod.isZero())throw new Error("Cannot take modPow with modulus 0");var r=Integer[1],base=this.mod(mod);while(exp.isPositive()){if(base.isZero())return Integer[0];if(exp.isOdd())r=r.multiply(base).mod(mod);exp=exp.divide(2);base=base.square().mod(mod)}return r};SmallInteger.prototype.modPow=BigInteger.prototype.modPow;function compareAbs(a,b){if(a.length!==b.length){return a.length>b.length?1:-1}for(var i=a.length-1;i>=0;i--){if(a[i]!==b[i])return a[i]>b[i]?1:-1}return 0}BigInteger.prototype.compareAbs=function(v){var n=parseValue(v),a=this.value,b=n.value;if(n.isSmall)return 1;return compareAbs(a,b)};SmallInteger.prototype.compareAbs=function(v){var n=parseValue(v),a=Math.abs(this.value),b=n.value;if(n.isSmall){b=Math.abs(b);return a===b?0:a>b?1:-1}return-1};BigInteger.prototype.compare=function(v){if(v===Infinity){return-1}if(v===-Infinity){return 1}var n=parseValue(v),a=this.value,b=n.value;if(this.sign!==n.sign){return n.sign?1:-1}if(n.isSmall){return this.sign?-1:1}return compareAbs(a,b)*(this.sign?-1:1)};BigInteger.prototype.compareTo=BigInteger.prototype.compare;SmallInteger.prototype.compare=function(v){if(v===Infinity){return-1}if(v===-Infinity){return 1}var n=parseValue(v),a=this.value,b=n.value;if(n.isSmall){return a==b?0:a>b?1:-1}if(a<0!==n.sign){return a<0?-1:1}return a<0?1:-1};SmallInteger.prototype.compareTo=SmallInteger.prototype.compare;BigInteger.prototype.equals=function(v){return this.compare(v)===0};SmallInteger.prototype.eq=SmallInteger.prototype.equals=BigInteger.prototype.eq=BigInteger.prototype.equals;BigInteger.prototype.notEquals=function(v){return this.compare(v)!==0};SmallInteger.prototype.neq=SmallInteger.prototype.notEquals=BigInteger.prototype.neq=BigInteger.prototype.notEquals;BigInteger.prototype.greater=function(v){return this.compare(v)>0};SmallInteger.prototype.gt=SmallInteger.prototype.greater=BigInteger.prototype.gt=BigInteger.prototype.greater;BigInteger.prototype.lesser=function(v){return this.compare(v)<0};SmallInteger.prototype.lt=SmallInteger.prototype.lesser=BigInteger.prototype.lt=BigInteger.prototype.lesser;BigInteger.prototype.greaterOrEquals=function(v){return this.compare(v)>=0};SmallInteger.prototype.geq=SmallInteger.prototype.greaterOrEquals=BigInteger.prototype.geq=BigInteger.prototype.greaterOrEquals;BigInteger.prototype.lesserOrEquals=function(v){return this.compare(v)<=0};SmallInteger.prototype.leq=SmallInteger.prototype.lesserOrEquals=BigInteger.prototype.leq=BigInteger.prototype.lesserOrEquals;BigInteger.prototype.isEven=function(){return(this.value[0]&1)===0};SmallInteger.prototype.isEven=function(){return(this.value&1)===0};BigInteger.prototype.isOdd=function(){return(this.value[0]&1)===1};SmallInteger.prototype.isOdd=function(){return(this.value&1)===1};BigInteger.prototype.isPositive=function(){return!this.sign};SmallInteger.prototype.isPositive=function(){return this.value>0};BigInteger.prototype.isNegative=function(){return this.sign};SmallInteger.prototype.isNegative=function(){return this.value<0};BigInteger.prototype.isUnit=function(){return false};SmallInteger.prototype.isUnit=function(){return Math.abs(this.value)===1};BigInteger.prototype.isZero=function(){return false};SmallInteger.prototype.isZero=function(){return this.value===0};BigInteger.prototype.isDivisibleBy=function(v){var n=parseValue(v);var value=n.value;if(value===0)return false;if(value===1)return true;if(value===2)return this.isEven();return this.mod(n).equals(Integer[0])};SmallInteger.prototype.isDivisibleBy=BigInteger.prototype.isDivisibleBy;function isBasicPrime(v){var n=v.abs();if(n.isUnit())return false;if(n.equals(2)||n.equals(3)||n.equals(5))return true;if(n.isEven()||n.isDivisibleBy(3)||n.isDivisibleBy(5))return false;if(n.lesser(25))return true}BigInteger.prototype.isPrime=function(){var isPrime=isBasicPrime(this);if(isPrime!==undefined)return isPrime;var n=this.abs(),nPrev=n.prev();var a=[2,3,5,7,11,13,17,19],b=nPrev,d,t,i,x;while(b.isEven())b=b.divide(2);for(i=0;i<a.length;i++){x=bigInt(a[i]).modPow(b,n);if(x.equals(Integer[1])||x.equals(nPrev))continue;for(t=true,d=b;t&&d.lesser(nPrev);d=d.multiply(2)){x=x.square().mod(n);if(x.equals(nPrev))t=false}if(t)return false}return true};SmallInteger.prototype.isPrime=BigInteger.prototype.isPrime;BigInteger.prototype.isProbablePrime=function(iterations){var isPrime=isBasicPrime(this);if(isPrime!==undefined)return isPrime;var n=this.abs();var t=iterations===undefined?5:iterations;for(var i=0;i<t;i++){var a=bigInt.randBetween(2,n.minus(2));if(!a.modPow(n.prev(),n).isUnit())return false}return true};SmallInteger.prototype.isProbablePrime=BigInteger.prototype.isProbablePrime;BigInteger.prototype.modInv=function(n){var t=bigInt.zero,newT=bigInt.one,r=parseValue(n),newR=this.abs(),q,lastT,lastR;while(!newR.equals(bigInt.zero)){q=r.divide(newR);lastT=t;lastR=r;t=newT;r=newR;newT=lastT.subtract(q.multiply(newT));newR=lastR.subtract(q.multiply(newR))}if(!r.equals(1))throw new Error(this.toString()+" and "+n.toString()+" are not co-prime");if(t.compare(0)===-1){t=t.add(n)}if(this.isNegative()){return t.negate()}return t};SmallInteger.prototype.modInv=BigInteger.prototype.modInv;BigInteger.prototype.next=function(){var value=this.value;if(this.sign){return subtractSmall(value,1,this.sign)}return new BigInteger(addSmall(value,1),this.sign)};SmallInteger.prototype.next=function(){var value=this.value;if(value+1<MAX_INT)return new SmallInteger(value+1);return new BigInteger(MAX_INT_ARR,false)};BigInteger.prototype.prev=function(){var value=this.value;if(this.sign){return new BigInteger(addSmall(value,1),true)}return subtractSmall(value,1,this.sign)};SmallInteger.prototype.prev=function(){var value=this.value;if(value-1>-MAX_INT)return new SmallInteger(value-1);return new BigInteger(MAX_INT_ARR,true)};var powersOfTwo=[1];while(2*powersOfTwo[powersOfTwo.length-1]<=BASE)powersOfTwo.push(2*powersOfTwo[powersOfTwo.length-1]);var powers2Length=powersOfTwo.length,highestPower2=powersOfTwo[powers2Length-1];function shift_isSmall(n){return(typeof n==="number"||typeof n==="string")&&+Math.abs(n)<=BASE||n instanceof BigInteger&&n.value.length<=1}BigInteger.prototype.shiftLeft=function(n){if(!shift_isSmall(n)){throw new Error(String(n)+" is too large for shifting.")}n=+n;if(n<0)return this.shiftRight(-n);var result=this;while(n>=powers2Length){result=result.multiply(highestPower2);n-=powers2Length-1}return result.multiply(powersOfTwo[n])};SmallInteger.prototype.shiftLeft=BigInteger.prototype.shiftLeft;BigInteger.prototype.shiftRight=function(n){var remQuo;if(!shift_isSmall(n)){throw new Error(String(n)+" is too large for shifting.")}n=+n;if(n<0)return this.shiftLeft(-n);var result=this;while(n>=powers2Length){if(result.isZero())return result;remQuo=divModAny(result,highestPower2);result=remQuo[1].isNegative()?remQuo[0].prev():remQuo[0];n-=powers2Length-1}remQuo=divModAny(result,powersOfTwo[n]);return remQuo[1].isNegative()?remQuo[0].prev():remQuo[0]};SmallInteger.prototype.shiftRight=BigInteger.prototype.shiftRight;function bitwise(x,y,fn){y=parseValue(y);var xSign=x.isNegative(),ySign=y.isNegative();var xRem=xSign?x.not():x,yRem=ySign?y.not():y;var xDigit=0,yDigit=0;var xDivMod=null,yDivMod=null;var result=[];while(!xRem.isZero()||!yRem.isZero()){xDivMod=divModAny(xRem,highestPower2);xDigit=xDivMod[1].toJSNumber();if(xSign){xDigit=highestPower2-1-xDigit}yDivMod=divModAny(yRem,highestPower2);yDigit=yDivMod[1].toJSNumber();if(ySign){yDigit=highestPower2-1-yDigit}xRem=xDivMod[0];yRem=yDivMod[0];result.push(fn(xDigit,yDigit))}var sum=fn(xSign?1:0,ySign?1:0)!==0?bigInt(-1):bigInt(0);for(var i=result.length-1;i>=0;i-=1){sum=sum.multiply(highestPower2).add(bigInt(result[i]))}return sum}BigInteger.prototype.not=function(){return this.negate().prev()};SmallInteger.prototype.not=BigInteger.prototype.not;BigInteger.prototype.and=function(n){return bitwise(this,n,function(a,b){return a&b})};SmallInteger.prototype.and=BigInteger.prototype.and;BigInteger.prototype.or=function(n){return bitwise(this,n,function(a,b){return a|b})};SmallInteger.prototype.or=BigInteger.prototype.or;BigInteger.prototype.xor=function(n){return bitwise(this,n,function(a,b){return a^b})};SmallInteger.prototype.xor=BigInteger.prototype.xor;var LOBMASK_I=1<<30,LOBMASK_BI=(BASE&-BASE)*(BASE&-BASE)|LOBMASK_I;function roughLOB(n){var v=n.value,x=typeof v==="number"?v|LOBMASK_I:v[0]+v[1]*BASE|LOBMASK_BI;return x&-x}function max(a,b){a=parseValue(a);b=parseValue(b);return a.greater(b)?a:b}function min(a,b){a=parseValue(a);b=parseValue(b);return a.lesser(b)?a:b}function gcd(a,b){a=parseValue(a).abs();b=parseValue(b).abs();if(a.equals(b))return a;if(a.isZero())return b;if(b.isZero())return a;var c=Integer[1],d,t;while(a.isEven()&&b.isEven()){d=Math.min(roughLOB(a),roughLOB(b));a=a.divide(d);b=b.divide(d);c=c.multiply(d)}while(a.isEven()){a=a.divide(roughLOB(a))}do{while(b.isEven()){b=b.divide(roughLOB(b))}if(a.greater(b)){t=b;b=a;a=t}b=b.subtract(a)}while(!b.isZero());return c.isUnit()?a:a.multiply(c)}function lcm(a,b){a=parseValue(a).abs();b=parseValue(b).abs();return a.divide(gcd(a,b)).multiply(b)}function randBetween(a,b){a=parseValue(a);b=parseValue(b);var low=min(a,b),high=max(a,b);var range=high.subtract(low).add(1);if(range.isSmall)return low.add(Math.floor(Math.random()*range));var length=range.value.length-1;var result=[],restricted=true;for(var i=length;i>=0;i--){var top=restricted?range.value[i]:BASE;var digit=truncate(Math.random()*top);result.unshift(digit);if(digit<top)restricted=false}result=arrayToSmall(result);return low.add(typeof result==="number"?new SmallInteger(result):new BigInteger(result,false))}var parseBase=function(text,base){var length=text.length;var i;var absBase=Math.abs(base);for(var i=0;i<length;i++){var c=text[i].toLowerCase();if(c==="-")continue;if(/[a-z0-9]/.test(c)){if(/[0-9]/.test(c)&&+c>=absBase){if(c==="1"&&absBase===1)continue;throw new Error(c+" is not a valid digit in base "+base+".")}else if(c.charCodeAt(0)-87>=absBase){throw new Error(c+" is not a valid digit in base "+base+".")}}}if(2<=base&&base<=36){if(length<=LOG_MAX_INT/Math.log(base)){var result=parseInt(text,base);if(isNaN(result)){throw new Error(c+" is not a valid digit in base "+base+".")}return new SmallInteger(parseInt(text,base))}}base=parseValue(base);var digits=[];var isNegative=text[0]==="-";for(i=isNegative?1:0;i<text.length;i++){var c=text[i].toLowerCase(),charCode=c.charCodeAt(0);if(48<=charCode&&charCode<=57)digits.push(parseValue(c));else if(97<=charCode&&charCode<=122)digits.push(parseValue(c.charCodeAt(0)-87));else if(c==="<"){var start=i;do{i++}while(text[i]!==">");digits.push(parseValue(text.slice(start+1,i)))}else throw new Error(c+" is not a valid character")}return parseBaseFromArray(digits,base,isNegative)};function parseBaseFromArray(digits,base,isNegative){var val=Integer[0],pow=Integer[1],i;for(i=digits.length-1;i>=0;i--){val=val.add(digits[i].times(pow));pow=pow.times(base)}return isNegative?val.negate():val}function stringify(digit){var v=digit.value;if(typeof v==="number")v=[v];if(v.length===1&&v[0]<=35){return"0123456789abcdefghijklmnopqrstuvwxyz".charAt(v[0])}return"<"+v+">"}function toBase(n,base){base=bigInt(base);if(base.isZero()){if(n.isZero())return"0";throw new Error("Cannot convert nonzero numbers to base 0.")}if(base.equals(-1)){if(n.isZero())return"0";if(n.isNegative())return new Array(1-n).join("10");return"1"+new Array(+n).join("01")}var minusSign="";if(n.isNegative()&&base.isPositive()){minusSign="-";n=n.abs()}if(base.equals(1)){if(n.isZero())return"0";return minusSign+new Array(+n+1).join(1)}var out=[];var left=n,divmod;while(left.isNegative()||left.compareAbs(base)>=0){divmod=left.divmod(base);left=divmod.quotient;var digit=divmod.remainder;if(digit.isNegative()){digit=base.minus(digit).abs();left=left.next()}out.push(stringify(digit))}out.push(stringify(left));return minusSign+out.reverse().join("")}BigInteger.prototype.toString=function(radix){if(radix===undefined)radix=10;if(radix!==10)return toBase(this,radix);var v=this.value,l=v.length,str=String(v[--l]),zeros="0000000",digit;while(--l>=0){digit=String(v[l]);str+=zeros.slice(digit.length)+digit}var sign=this.sign?"-":"";return sign+str};SmallInteger.prototype.toString=function(radix){if(radix===undefined)radix=10;if(radix!=10)return toBase(this,radix);return String(this.value)};BigInteger.prototype.toJSON=SmallInteger.prototype.toJSON=function(){return this.toString()};BigInteger.prototype.valueOf=function(){return+this.toString()};BigInteger.prototype.toJSNumber=BigInteger.prototype.valueOf;SmallInteger.prototype.valueOf=function(){return this.value};SmallInteger.prototype.toJSNumber=SmallInteger.prototype.valueOf;function parseStringValue(v){if(isPrecise(+v)){var x=+v;if(x===truncate(x))return new SmallInteger(x);throw"Invalid integer: "+v}var sign=v[0]==="-";if(sign)v=v.slice(1);var split=v.split(/e/i);if(split.length>2)throw new Error("Invalid integer: "+split.join("e"));if(split.length===2){var exp=split[1];if(exp[0]==="+")exp=exp.slice(1);exp=+exp;if(exp!==truncate(exp)||!isPrecise(exp))throw new Error("Invalid integer: "+exp+" is not a valid exponent.");var text=split[0];var decimalPlace=text.indexOf(".");if(decimalPlace>=0){exp-=text.length-decimalPlace-1;text=text.slice(0,decimalPlace)+text.slice(decimalPlace+1)}if(exp<0)throw new Error("Cannot include negative exponent part for integers");text+=new Array(exp+1).join("0");v=text}var isValid=/^([0-9][0-9]*)$/.test(v);if(!isValid)throw new Error("Invalid integer: "+v);var r=[],max=v.length,l=LOG_BASE,min=max-l;while(max>0){r.push(+v.slice(min,max));min-=l;if(min<0)min=0;max-=l}trim(r);return new BigInteger(r,sign)}function parseNumberValue(v){if(isPrecise(v)){if(v!==truncate(v))throw new Error(v+" is not an integer.");return new SmallInteger(v)}return parseStringValue(v.toString())}function parseValue(v){if(typeof v==="number"){return parseNumberValue(v)}if(typeof v==="string"){return parseStringValue(v)}return v}for(var i=0;i<1e3;i++){Integer[i]=new SmallInteger(i);if(i>0)Integer[-i]=new SmallInteger(-i)}Integer.one=Integer[1];Integer.zero=Integer[0];Integer.minusOne=Integer[-1];Integer.max=max;Integer.min=min;Integer.gcd=gcd;Integer.lcm=lcm;Integer.isInstance=function(x){return x instanceof BigInteger||x instanceof SmallInteger};Integer.randBetween=randBetween;Integer.fromArray=function(digits,base,isNegative){return parseBaseFromArray(digits.map(parseValue),parseValue(base||10),isNegative)};return Integer}();if(typeof module!=="undefined"&&module.hasOwnProperty("exports")){module.exports=bigInt}if(typeof define==="function"&&define.amd){define("big-integer",[],function(){return bigInt})}
+
+;(function (globalScope) {
+	'use strict';
+	
+	/*
+	
+	# break_break_infinity.js
+	A replacement for break_infinity.js when 1e900719925470992 isn't enough.
+	If you want to prioritize speed over massive numbers, please use break_infinity.js instead.
+	
+	https://github.com/1234abcdcba4321/break_break_infinity.js
+	
+	This library is open source and free to use/modify/fork for any purpose you want.
+	
+	By 1234abcdcba4321 (and 100% copied from patashu shh)
+	
+	---
+	
+	bigDecimal has only two fields:
+	
+	mantissa: A number (double) with absolute value between [1, 10) OR exactly 0. If mantissa is ever 10 or greater, it should be normalized (divide by 10 and add 1 to exponent until it is less than 10, or multiply by 10 and subtract 1 from exponent until it is 1 or greater). Infinity/-Infinity/NaN will cause bad things to happen.
+	exponent: A bigInt.
+	
+	The decimal's value is simply mantissa*10^exponent.
+	
+	Functions of bigDecimal:
+	
+	fromMantissaExponent(mantissa, exponent)
+	fromDecimal(value)
+	fromNumber(value)
+	fromString(value)
+	fromValue(value)
+	
+	toNumber()
+	mantissaWithDecimalPlaces(places)
+	toString()
+	toFixed(places)
+	toExponential(places)
+	
+	abs(), neg(), sign()
+	add(value), sub(value), mul(value), div(value), recip()
+	
+	cmp(value), eq(value), neq(value), lt(value), lte(value), gt(value), gte(value)
+	cmp_tolerance(value, tolerance), eq_tolerance(value, tolerance), neq_tolerance(value, tolerance), lt_tolerance(value, tolerance), lte_tolerance(value, tolerance), gt_tolerance(value, tolerance), gte_tolerance(value, tolerance)
+	
+	log(base), log10(), log2(), ln()
+	pow(value, other), pow(value), pow_base(value), exp(), sqr(), sqrt(), cube(), cbrt()	
+	*/
+	
+  var sigfigs=14; //doesnt do anything above 17
+	var LN10;
+	
+	//we need this lookup table because Math.pow(10, exponent) when exponent's absolute value is large is slightly inaccurate. you can fix it with the power of math... or just make a lookup table. faster AND simpler
+	var powersof10 = [1e-308, 1e-307, 1e-306, 1e-305, 1e-304, 1e-303, 1e-302, 1e-301, 1e-300, 1e-299, 1e-298, 1e-297, 1e-296, 1e-295, 1e-294, 1e-293, 1e-292, 1e-291, 1e-290, 1e-289, 1e-288, 1e-287, 1e-286, 1e-285, 1e-284, 1e-283, 1e-282, 1e-281, 1e-280, 1e-279, 1e-278, 1e-277, 1e-276, 1e-275, 1e-274, 1e-273, 1e-272, 1e-271, 1e-270, 1e-269, 1e-268, 1e-267, 1e-266, 1e-265, 1e-264, 1e-263, 1e-262, 1e-261, 1e-260, 1e-259, 1e-258, 1e-257, 1e-256, 1e-255, 1e-254, 1e-253, 1e-252, 1e-251, 1e-250, 1e-249, 1e-248, 1e-247, 1e-246, 1e-245, 1e-244, 1e-243, 1e-242, 1e-241, 1e-240, 1e-239, 1e-238, 1e-237, 1e-236, 1e-235, 1e-234, 1e-233, 1e-232, 1e-231, 1e-230, 1e-229, 1e-228, 1e-227, 1e-226, 1e-225, 1e-224, 1e-223, 1e-222, 1e-221, 1e-220, 1e-219, 1e-218, 1e-217, 1e-216, 1e-215, 1e-214, 1e-213, 1e-212, 1e-211, 1e-210, 1e-209, 1e-208, 1e-207, 1e-206, 1e-205, 1e-204, 1e-203, 1e-202, 1e-201, 1e-200, 1e-199, 1e-198, 1e-197, 1e-196, 1e-195, 1e-194, 1e-193, 1e-192, 1e-191, 1e-190, 1e-189, 1e-188, 1e-187, 1e-186, 1e-185, 1e-184, 1e-183, 1e-182, 1e-181, 1e-180, 1e-179, 1e-178, 1e-177, 1e-176, 1e-175, 1e-174, 1e-173, 1e-172, 1e-171, 1e-170, 1e-169, 1e-168, 1e-167, 1e-166, 1e-165, 1e-164, 1e-163, 1e-162, 1e-161, 1e-160, 1e-159, 1e-158, 1e-157, 1e-156, 1e-155, 1e-154, 1e-153, 1e-152, 1e-151, 1e-150, 1e-149, 1e-148, 1e-147, 1e-146, 1e-145, 1e-144, 1e-143, 1e-142, 1e-141, 1e-140, 1e-139, 1e-138, 1e-137, 1e-136, 1e-135, 1e-134, 1e-133, 1e-132, 1e-131, 1e-130, 1e-129, 1e-128, 1e-127, 1e-126, 1e-125, 1e-124, 1e-123, 1e-122, 1e-121, 1e-120, 1e-119, 1e-118, 1e-117, 1e-116, 1e-115, 1e-114, 1e-113, 1e-112, 1e-111, 1e-110, 1e-109, 1e-108, 1e-107, 1e-106, 1e-105, 1e-104, 1e-103, 1e-102, 1e-101, 1e-100, 1e-99, 1e-98, 1e-97, 1e-96, 1e-95, 1e-94, 1e-93, 1e-92, 1e-91, 1e-90, 1e-89, 1e-88, 1e-87, 1e-86, 1e-85, 1e-84, 1e-83, 1e-82, 1e-81, 1e-80, 1e-79, 1e-78, 1e-77, 1e-76, 1e-75, 1e-74, 1e-73, 1e-72, 1e-71, 1e-70, 1e-69, 1e-68, 1e-67, 1e-66, 1e-65, 1e-64, 1e-63, 1e-62, 1e-61, 1e-60, 1e-59, 1e-58, 1e-57, 1e-56, 1e-55, 1e-54, 1e-53, 1e-52, 1e-51, 1e-50, 1e-49, 1e-48, 1e-47, 1e-46, 1e-45, 1e-44, 1e-43, 1e-42, 1e-41, 1e-40, 1e-39, 1e-38, 1e-37, 1e-36, 1e-35, 1e-34, 1e-33, 1e-32, 1e-31, 1e-30, 1e-29, 1e-28, 1e-27, 1e-26, 1e-25, 1e-24, 1e-23, 1e-22, 1e-21, 1e-20, 1e-19, 1e-18, 1e-17, 1e-16, 1e-15, 1e-14, 1e-13, 1e-12, 1e-11, 1e-10, 1e-9, 1e-8, 1e-7, 1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1e0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9, 1e10, 1e11, 1e12, 1e13, 1e14, 1e15, 1e16, 1e17, 1e18, 1e19, 1e20, 1e21, 1e22, 1e23, 1e24, 1e25, 1e26, 1e27, 1e28, 1e29, 1e30, 1e31, 1e32, 1e33, 1e34, 1e35, 1e36, 1e37, 1e38, 1e39, 1e40, 1e41, 1e42, 1e43, 1e44, 1e45, 1e46, 1e47, 1e48, 1e49, 1e50, 1e51, 1e52, 1e53, 1e54, 1e55, 1e56, 1e57, 1e58, 1e59, 1e60, 1e61, 1e62, 1e63, 1e64, 1e65, 1e66, 1e67, 1e68, 1e69, 1e70, 1e71, 1e72, 1e73, 1e74, 1e75, 1e76, 1e77, 1e78, 1e79, 1e80, 1e81, 1e82, 1e83, 1e84, 1e85, 1e86, 1e87, 1e88, 1e89, 1e90, 1e91, 1e92, 1e93, 1e94, 1e95, 1e96, 1e97, 1e98, 1e99, 1e100, 1e101, 1e102, 1e103, 1e104, 1e105, 1e106, 1e107, 1e108, 1e109, 1e110, 1e111, 1e112, 1e113, 1e114, 1e115, 1e116, 1e117, 1e118, 1e119, 1e120, 1e121, 1e122, 1e123, 1e124, 1e125, 1e126, 1e127, 1e128, 1e129, 1e130, 1e131, 1e132, 1e133, 1e134, 1e135, 1e136, 1e137, 1e138, 1e139, 1e140, 1e141, 1e142, 1e143, 1e144, 1e145, 1e146, 1e147, 1e148, 1e149, 1e150, 1e151, 1e152, 1e153, 1e154, 1e155, 1e156, 1e157, 1e158, 1e159, 1e160, 1e161, 1e162, 1e163, 1e164, 1e165, 1e166, 1e167, 1e168, 1e169, 1e170, 1e171, 1e172, 1e173, 1e174, 1e175, 1e176, 1e177, 1e178, 1e179, 1e180, 1e181, 1e182, 1e183, 1e184, 1e185, 1e186, 1e187, 1e188, 1e189, 1e190, 1e191, 1e192, 1e193, 1e194, 1e195, 1e196, 1e197, 1e198, 1e199, 1e200, 1e201, 1e202, 1e203, 1e204, 1e205, 1e206, 1e207, 1e208, 1e209, 1e210, 1e211, 1e212, 1e213, 1e214, 1e215, 1e216, 1e217, 1e218, 1e219, 1e220, 1e221, 1e222, 1e223, 1e224, 1e225, 1e226, 1e227, 1e228, 1e229, 1e230, 1e231, 1e232, 1e233, 1e234, 1e235, 1e236, 1e237, 1e238, 1e239, 1e240, 1e241, 1e242, 1e243, 1e244, 1e245, 1e246, 1e247, 1e248, 1e249, 1e250, 1e251, 1e252, 1e253, 1e254, 1e255, 1e256, 1e257, 1e258, 1e259, 1e260, 1e261, 1e262, 1e263, 1e264, 1e265, 1e266, 1e267, 1e268, 1e269, 1e270, 1e271, 1e272, 1e273, 1e274, 1e275, 1e276, 1e277, 1e278, 1e279, 1e280, 1e281, 1e282, 1e283, 1e284, 1e285, 1e286, 1e287, 1e288, 1e289, 1e290, 1e291, 1e292, 1e293, 1e294, 1e295, 1e296, 1e297, 1e298, 1e299, 1e300, 1e301, 1e302, 1e303, 1e304, 1e305, 1e306, 1e307, 1e308];
+	var indexof0inpowersof10 = 308;
+	
+	class bigDecimal { 
+	  
+		normalize() {
+			//SAFETY: don't try to normalize non-numbers or we infinite loop
+			if (!Number.isFinite(this.mantissa)) return this;
+      //SAFETY: make sure exponent is a bigInt
+      this.exponent=bigInt(this.exponent);
+			while (Math.abs(this.mantissa) < 1 && this.mantissa != 0)
+			{
+				this.mantissa *= 10;
+				this.exponent = this.exponent.prev();
+			}
+			while (Math.abs(this.mantissa) >= 10)
+			{
+				this.mantissa /= 10;
+				this.exponent = this.exponent.next();
+			}
+			//SAFETY: turn negative 0 into 0 lol
+			if (this.mantissa == 0) { this.mantissa = 0; this.exponent = bigInt.zero; }
+
+			return this;
+		}
+		
+		fromMantissaExponent(mantissa, exponent) {
+			//SAFETY: don't let in non-numbers
+			if (!Number.isFinite(mantissa) || !Number.isFinite(exponent)) { mantissa = Number.NaN; exponent = Number.NaN; }
+			this.mantissa = mantissa;
+			this.exponent = exponent;
+			this.normalize(); //SAFETY: Doing two abs and two comparisons is a small price to pay to prevent weirdness everywhere.
+			return this;
+		}
+		
+		fromDecimal(value) {
+			this.mantissa = value.mantissa;
+			this.exponent = bigInt(value.exponent); //SAFETY: support having the normal break_infinity as well bc no one is gonna need everything above e9e15
+			return this;
+		}
+		
+		fromNumber(value) {
+			//SAFETY: Handle Infinity and NaN in a somewhat meaningful way.
+			if (Number.isNaN(value)) { this.mantissa = Number.NaN; this.exponent = Number.NaN; }
+			else if (value == Number.POSITIVE_INFINITY) { this.mantissa = 1.7977; this.exponent = bigInt(308); }
+			else if (value == Number.NEGATIVE_INFINITY) { this.mantissa = -1.7977; this.exponent = bigInt(308); }
+			else if (value == 0) { this.mantissa = 0; this.exponent = bigInt.zero; }
+			else
+			{
+				this.exponent = bigInt(Math.floor(Math.log10(Math.abs(value))));
+				this.mantissa = value/powersof10[this.exponent+indexof0inpowersof10];
+				this.normalize(); //SAFETY: Doing two abs and two comparisons is a small price to pay to prevent weirdness everywhere.
+			}
+			return this;
+		}
+		
+		fromString(value) {
+			if (value.indexOf("e") != -1)
+			{
+				var parts = value.split("e");
+				this.mantissa = parseFloat(parts[0]);
+				this.exponent = parseFloat(parts[1]);
+				this.normalize(); //SAFETY: Doing two abs and two comparisons is a small price to pay to prevent weirdness everywhere.
+				return this;
+			}
+			else
+			{
+				return this.fromNumber(parseFloat(value));
+			}
+		}
+
+		fromValue(value) {
+			if (value instanceof Decimal || value instanceof bigDecimal) {
+				return this.fromDecimal(value);
+			}
+			else if (typeof(value) == 'number') {
+				return this.fromNumber(value);
+			}
+			else if (typeof(value) == 'string') {
+				return this.fromString(value);
+			}
+			else {
+				this.mantissa = 0;
+				this.exponent = bigInt.zero;
+				return this;
+			}
+		}
+		
+		constructor(value)
+		{
+			if (value instanceof Decimal || value instanceof bigDecimal) {
+				this.fromDecimal(value);
+			}
+			else if (typeof(value) == 'number') {
+				this.fromNumber(value);
+			}
+			else if (typeof(value) == 'string') {
+				this.fromString(value);
+			}
+			else {
+				this.mantissa = 0;
+				this.exponent = bigInt.zero;
+			}
+		}
+		
+		static fromMantissaExponent(mantissa, exponent) {
+			return new bigDecimal().fromMantissaExponent(mantissa, exponent);
+		}
+		
+		static fromDecimal(value) {
+			return value;
+		}
+		
+		static fromNumber(value) {
+			return new bigDecimal().fromNumber(value);
+		}
+		
+		static fromString(value) {
+			return new bigDecimal().fromString(value);
+		}
+		
+		static fromValue(value) {
+			return new bigDecimal(value);
+		}
+		
+		toNumber() {
+      if (this.exponent.gt(308)) return Number.POSITIVE_INFINITY
+      if (this.exponent.lt(-308)) return Number.NEGATIVE_INFINITY
+			return this.mantissa*Math.pow(10, this.exponent);
+		}
+		
+		mantissaWithDecimalPlaces(places) {
+			// https://stackoverflow.com/a/37425022
+		
+			if (Number.isNaN(this.mantissa)) return Number.NaN;
+			if (this.mantissa == 0) return 0;
+			
+			var len = places+1;
+			var numDigits = Math.ceil(Math.log10(Math.abs(this.mantissa)));
+			var rounded = Math.round(this.mantissa*Math.pow(10,len-numDigits))*Math.pow(10,numDigits-len); 
+			return parseFloat(rounded.toFixed(Math.max(len-numDigits,0)));
+		}
+		
+		toString() {
+			if (Number.isNaN(this.mantissa) || Number.isNaN(this.exponent)) { return "NaN"; }
+
+			if (this.mantissa == 0) return "0";
+			
+			if (this.exponent.lt(21) && this.exponent.gt(-7))
+			{
+				return this.toNumber().toString();
+			}
+			
+			return this.mantissa + (this.exponent.gte(0) ? "e+" : "e") + this.exponent.toString();
+		}
+		
+		toStringWithDecimalPlaces(places) {
+			// https://stackoverflow.com/a/37425022
+		
+			if (Number.isNaN(this.mantissa) || Number.isNaN(this.exponent)) { return "NaN"; }
+
+			if (this.mantissa == 0) return "0";
+			
+			if (!Number.isFinite(places)) { return this.toString() }
+			
+			var len = places+1;
+			var numDigits = Math.ceil(Math.log10(Math.abs(this.mantissa)));
+			var rounded = Math.round(this.mantissa*Math.pow(10,len-numDigits))*Math.pow(10,numDigits-len); 
+			
+			return rounded.toFixed(Math.max(len-numDigits,0)) + (this.exponent >= 0 ? "e+" : "e") + this.exponent.toString();
+		}
+		
+		toFixed(places) {
+			if (Number.isNaN(this.mantissa) || Number.isNaN(this.exponent)) { return "NaN"; }
+			
+			if (!Number.isFinite(places)) places = sigfigs;
+			
+			// two cases:
+			// 1) exponent is 17 or greater: just print out mantissa with the appropriate number of zeroes after it
+			// 2) exponent is 16 or less: use basic toFixed
+			
+			if (this.exponent >= sigfigs) //needs fixing
+			{
+				return this.mantissa.toString().replace(".", "").padEnd(this.exponent+1, "0");
+			}
+			else
+			{
+				return this.toNumber().toFixed(places);
+			}
+		}
+		
+		valueOf() { return this.toString(); }
+		toJSON() { return this.toString(); }
+		toExponential(places) { return this.toStringWithDecimalPlaces(places); }
+		
+		get m() { return this.mantissa; }
+		set m(value) { this.mantissa = value; }
+		get e() { return this.exponent; }
+		set e(value) { this.exponent = bigInt(value); }
+		
+		abs() {
+			return bigDecimal.fromMantissaExponent(Math.abs(this.mantissa), this.exponent);
+		}
+		
+		static abs(value) {
+			return fromValue(value).abs();
+		}
+		
+		neg() {
+			return bigDecimal.fromMantissaExponent(-this.mantissa, this.exponent);
+		}
+		
+		static neg(value) {
+			return fromValue(value).neg();
+		}
+		
+		negate() {
+			return this.neg();
+		}
+		
+		static negate(value) {
+      return fromValue(value).neg();
+		}
+		
+		negated() {
+			return this.neg();
+		}
+		
+		static negated(value) {
+			return fromValue(value).neg();
+		}
+		
+		sign() {
+			return Math.sign(this.mantissa);
+		}
+		
+		static sign(value) {
+			return fromValue(value).sign();
+		}
+		
+		sgn() {
+			return this.sign();
+		}
+		
+		static sgn(value) {
+			return fromValue(value).sign();
+		}
+		
+		round() {
+			if (this.exponent.lt(0)) return bigDecimal.fromNumber(0);
+      if (this.exponent.lt(sigfigs)) return bigDecimal.fromNumber(Math.round(this.toNumber()));
+			return this;
+		}
+		
+		static round(value) {
+			return fromValue(value).round();
+		}
+		
+		floor() {
+      if (this.exponent.lt(0)) return bigDecimal.fromNumber(this.mantissa >= 0 ? 0 : -1);
+			if (this.exponent.lt(sigfigs)) return bigDecimal.fromNumber(Math.floor(this.toNumber()));
+			return this;
+		}
+		
+		static floor(value) {
+			return fromValue(value).floor();
+		}
+		
+		ceil() {
+      if (this.exponent.lt(0)) return bigDecimal.fromNumber(this.mantissa > 0 ? 1 : 0);
+			if (this.exponent.lt(sigfigs)) return bigDecimal.fromNumber(Math.ceil(this.toNumber()));
+			return this;
+		}
+		
+		static ceil(value) {
+			return fromValue(value).ceil();
+		}
+		
+		trunc() {
+      if (this.exponent.lt(0)) return bigDecimal.fromNumber(0);
+			if (this.exponent.lt(sigfigs)) return bigDecimal.fromNumber(Math.trunc(this.toNumber()));
+			return this;
+		}
+		
+		static trunc(value) {
+			return fromValue(value).trunc();
+		}
+		
+		add(value) {
+			//figure out which is bigger, shrink the mantissa of the smaller by the difference in exponents, add mantissas, normalize and return
+			
+			value = fromValue(value);
+			
+			if (this.mantissa == 0) { return value; }
+			if (value.mantissa == 0) { return this; }
+			
+			var biggerDecimal, smallerDecimal;
+			if (this.exponent >= value.exponent)
+			{
+				biggerDecimal = this;
+				smallerDecimal = value;
+			}
+			else
+			{
+				biggerDecimal = value;
+				smallerDecimal = this;
+			}
+			
+			if (biggerDecimal.exponent.minus(smallerDecimal.exponent).gt(sigfigs)) return biggerDecimal;
+			else
+			{
+				return bigDecimal.fromMantissaExponent(
+				biggerDecimal.mantissa + smallerDecimal.mantissa*powersof10[(smallerDecimal.exponent.minus(biggerDecimal.exponent))+indexof0inpowersof10],
+				biggerDecimal.exponent);
+			}
+		}
+		
+		static add(value, other) {
+			return fromValue(value).add(other);
+		}
+		
+		plus(value) {
+			return this.add(value);
+		}
+		
+		static plus(value, other) {
+			return fromValue(value).add(other);
+		}
+		
+		sub(value) {
+			return this.add(bigDecimal.neg(value));
+		}
+		
+		static sub(value, other) {
+			return fromValue(value).sub(other);
+		}
+		
+		subtract(value) {
+			return this.sub(value);
+		}
+		
+		static subtract(value, other) {
+			return fromValue(value).sub(other);
+		}
+		
+		minus(value) {
+			return this.sub(value);
+		}
+		
+		static minus(value, other) {
+			return fromValue(value).sub(other);
+		}
+		
+		mul(value) {
+			/*
+			a_1*10^b_1 * a_2*10^b_2
+			= a_1*a_2*10^(b_1+b_2)
+			*/
+		
+			value = fromValue(value);
+
+			return Decimal.fromMantissaExponent(this.mantissa*value.mantissa, this.exponent.plus(value.exponent));
+		}
+		
+		static mul(value, other) {
+			return fromValue(value).mul(other);
+		}
+		
+		multiply(value) {
+			return this.mul(value);
+		}
+		
+		static multiply(value, other) {
+			return fromValue(value).mul(other);
+		}
+		
+		times(value) {
+			return this.mul(value);
+		}
+		
+		static times(value, other) {
+			return fromValue(value).mul(other);
+		}
+		
+		div(value) {
+			return this.mul(fromValue(value).recip());
+		}
+		
+		static div(value, other) {
+			return fromValue(value).div(other);
+		}
+		
+		divide(value) {
+			return this.div(value);
+		}
+		
+		static divide(value, other) {
+			return fromValue(value).div(other);
+		}
+		
+		divideBy(value) { return this.div(value); }
+		dividedBy(value) { return this.div(value); }
+		
+		recip() {
+			return Decimal.fromMantissaExponent(1/this.mantissa, this.exponent.times(-1));
+		}
+		
+		static recip(value) {
+			return fromValue(value).recip();
+		}
+		
+		reciprocal() {
+			return this.recip();
+		}
+		
+		static reciprocal(value) {
+      return fromValue(value).recip();
+		}
+		
+		reciprocate() {
+			return this.recip();
+		}
+		
+		static reciprocate(value) {
+			return fromValue(value).recip();
+		}
+		
+		//-1 for less than value, 0 for equals value, 1 for greater than value
+		cmp(value) {
+		  value = fromValue(value);
+			
+			
+			if (this.mantissa == 0)
+			{
+				if (value.mantissa == 0) { return 0; }
+				if (value.mantissa < 0) { return 1; }
+				if (value.mantissa > 0) { return -1; }
+			}
+			else if (value.mantissa == 0)
+			{
+				if (this.mantissa < 0) { return -1; }
+				if (this.mantissa > 0) { return 1; }
+			}
+			
+			if (this.mantissa > 0) //positive
+			{
+				if (value.mantissa < 0) { return 1; }
+				if (this.exponent.gt(value.exponent)) { return 1; }
+				if (this.exponent.lt(value.exponent)) { return -1; }
+				if (this.mantissa > value.mantissa) { return 1; }
+				if (this.mantissa < value.mantissa) { return -1; }
+				return 0;
+			}
+			else if (this.mantissa < 0) // negative
+			{
+				if (value.mantissa > 0) { return -1; }
+				if (this.exponent.gt(value.exponent)) { return -1; }
+				if (this.exponent.lt(value.exponent)) { return 1; }
+				if (this.mantissa > value.mantissa) { return -1; }
+				if (this.mantissa < value.mantissa) { return 1; }
+				return 0;
+			}
+		}
+		
+		static cmp(value, other) {
+			return fromValue(value).cmp(other);
+		}
+		
+		compare(value) {
+			return this.cmp(value);
+		}
+		
+		static compare(value, other) {
+			return fromValue(value).cmp(other);
+		}
+		
+		eq(value) {
+			return this.cmp(value) == 0;
+		}
+		
+		static eq(value, other) {
+			return fromValue(value).eq(other);
+		}
+		
+		equals(value) {
+			return this.eq(value);
+		}
+		
+		static equals(value, other) {
+			return fromValue(value).eq(other);
+		}
+		
+		neq(value) {
+			return this.cmp(value) != 0;
+		}
+		
+		static neq(value, other) {
+      return fromValue(value).neq(other);
+		}
+		
+		notEquals(value) {
+			return this.neq(value);
+		}
+		
+		static notEquals(value, other) {
+      return fromValue(value).neq(other);
+		}
+		
+		lt(value) {
+			return this.cmp(value) < 0;
+		}
+		
+		static lt(value, other) {
+			return fromValue(value).lt(other);
+		}
+		
+		lte(value) {
+			return this.cmp(value) <= 0;
+		}
+		
+		static lte(value, other) {
+			return fromValue(value).lte(other);
+		}
+		
+		gt(value) {
+			return this.cmp(value) > 0;
+		}
+		
+		static gt(value, other) {
+			return fromValue(value).gt(other);
+		}
+		
+		gte(value) {
+			return this.cmp(value) >= 0;
+		}
+		
+		static gte(value, other) {
+			return fromValue(value).gte(other);
+		}
+		
+		max(value) {
+			var discriminant = this.cmp(value);
+			if (discriminant >= 0) return this;
+			return fromValue(value);
+		}
+		
+		static max(value, other) {
+			return fromValue(value).max(other);
+		}
+		
+		min(value) {
+			var discriminant = this.cmp(value);
+			if (discriminant <= 0) return this;
+			return fromValue(value);
+		}
+		
+		static min(value, other) {
+			return fromValue(value).min(other);
+		}
+		
+		cmp_tolerance(value, tolerance) {
+			if (this.eq_tolerance(value, tolerance)) return 0;
+			return this.cmp(value);
+		}
+		
+		static cmp_tolerance(value, other, tolerance) {
+			return fromValue(value).cmp_tolerance(other, tolerance);
+		}
+		
+		compare_tolerance(value, tolerance) {
+			return this.cmp_tolerance(value, tolerance);
+		}
+		
+		static compare_tolerance(value, other, tolerance) {
+			return fromValue(value).cmp_tolerance(other, tolerance);
+		}
+		
+		//tolerance is a relative tolerance, multiplied by the greater of the magnitudes of the two arguments. For example, if you put in 1e-9, then any number closer to the larger number than (larger number)*1e-9 will be considered equal.
+		eq_tolerance(value, tolerance) {
+			value = fromValue(value)
+		
+			// https://stackoverflow.com/a/33024979
+			//return abs(a-b) <= tolerance * max(abs(a), abs(b))
+			
+			return Decimal.lte(
+				this.sub(value).abs(),
+				Decimal.max(this.abs(), value.abs()).mul(tolerance)
+				);
+		}
+		
+		static eq_tolerance(value, other, tolerance) {
+			return fromValue(value).eq_tolerance(other, tolerance);
+		}
+		
+		equals_tolerance(value, tolerance) {
+			return this.eq_tolerance(value, tolerance);
+		}
+		
+		static equals_tolerance(value, other, tolerance) {
+			return fromValue(value).eq_tolerance(other, tolerance);
+		}
+		
+		neq_tolerance(value, tolerance) {
+			return !this.eq_tolerance(value, tolerance);
+		}
+		
+		static neq_tolerance(value, other, tolerance) {
+			return fromValue(value).neq_tolerance(other, tolerance);
+		}
+		
+		notEquals_tolerance(value, tolerance) {
+			return this.neq_tolerance(value, tolerance);
+		}
+		
+		static notEquals_tolerance(value, other, tolerance) {
+			return fromValue(value).neq_tolerance(other, tolerance);
+		}
+		
+		lt_tolerance(value, tolerance) {
+			if (this.eq_tolerance(value, tolerance)) return false;
+			return this.lt(value);
+		}
+		
+		static lt_tolerance(value, other, tolerance) {
+			return fromValue(value).lt_tolerance(other, tolerance);
+		}
+		
+		lte_tolerance(value, tolerance) {
+			if (this.eq_tolerance(value, tolerance)) return true;
+			return this.lt(value);
+		}
+		
+		static lte_tolerance(value, other, tolerance) {
+			return fromValue(value).lte_tolerance(other, tolerance);
+		}
+		
+		gt_tolerance(value, tolerance) {
+			if (this.eq_tolerance(value, tolerance)) return false;
+			return this.gt(value);
+		}
+		
+		static gt_tolerance(value, other, tolerance) {
+			return fromValue(value).gt_tolerance(other, tolerance);
+		}
+		
+		gte_tolerance(value, tolerance) {
+			if (this.eq_tolerance(value, tolerance)) return true;
+			return this.gt(value);
+		}
+		
+		static gte_tolerance(value, other, tolerance) {
+			return fromValue(value).gte_tolerance(other, tolerance);
+		}
+		
+		log10() {
+      if(this.exponent.gt(5e15)) { //bigInts autoconvert to numbers when used anyway
+        if (this.mantissa > 3.162) return this.exponent.next();
+        else return this.exponent;
+      }
+			return this.exponent + Math.log10(this.mantissa);
+		}
+		
+		static log10(value) {
+			return fromValue(value).log10();
+		}
+		
+		log(base) {
+			//UN-SAFETY: Most incremental game cases are log(number := 1 or greater, base := 2 or greater). We assume this to be true and thus only need to return a number, not a Decimal, and don't do any other kind of error checking.
+			return (Math.LN10/Math.log(base))*this.log10();
+		}
+		
+		static log(value, base) {
+			return fromValue(value).log(base);
+		}
+		
+		log2() {
+      if(this.exponent.gt(5e15)) return this.log10().times(3.32192809488736234787); //can prob be improved
+			return 3.32192809488736234787*this.log10();
+		}
+		
+		static log2(value) {
+			return fromValue(value).log2();
+		}
+		
+		ln() {
+			return 2.30258509299404568402*this.log10();
+		}
+		
+		static ln(value) {
+			return fromValue(value).ln();
+		}
+		
+		logarithm(base) {
+			return this.log(base);
+		}
+		
+		static logarithm(value, base) {
+			return fromValue(value).logarithm(base);
+		}
+		
+		pow(value) {
+			//UN-SAFETY: We're assuming Decimal^number because number^Decimal or Decimal^Decimal is unheard of in incremental games.
+		
+			//Fast track: If (this.exponent*value) is an integer, we can do a very fast method.
+			if (Number.isInteger(this.exponent*value))
+			{
+				var newMantissa = Math.pow(this.mantissa, value);
+				if (Number.isFinite(newMantissa))
+				{
+					return bigDecimal.fromMantissaExponent(newMantissa, this.exponent.times(value).plus(this.exponent.mod(value)));
+				}
+			}
+			
+      return Decimal.fromMantissaExponent(1, value*this.log10()); //unsure if thisll work, hopefully it does
+		}
+		
+		pow_base(value) {
+			return fromValue(value).pow(this);
+		}
+		
+		static pow(value, other) {
+			//Fast track: 10^integer
+			if (value == 10 && (Number.isInteger(other) || other instanceof bigInt)) return Decimal.fromMantissaExponent(1, other);
+			
+			return fromValue(value).pow(other);
+		}
+		
+		exp() {
+      //if needed, can get the original from break_infinity.js
+      return this.pow(2.718281828459045)
+		}
+		
+		static exp(value) {
+			return fromValue(value).exp();
+		}
+		
+		sqr() {
+			return this.pow(2)
+		}
+		
+		static sqr(value) {
+			return fromValue(value).sqr();
+		}
+		
+		sqrt() {
+			return this.pow(0.5);
+		}
+		
+		static sqrt(value) {
+			return fromValue(value).sqrt();
+		}
+		
+		cube() {
+			return this.pow(3);
+		}
+		
+		static cube(value) {
+			return fromValue(value).cube();
+		}
+		
+		cbrt() {
+			return this.pow(1/3);
+		}
+		
+		static cbrt(value) {
+			return fromValue(value).cbrt();
+		}
+	}
+	
+	// Export.
+
+	// AMD.
+	if (typeof define == 'function' && define.amd) {
+		define(function () {
+		return bigDecimal;
+	});
+
+	// Node and other environments that support module.exports.
+	} else if (typeof module != 'undefined' && module.exports) {
+		module.exports = bigDecimal;
+
+	// Browser.
+	} else {
+	if (!globalScope) {
+		globalScope = typeof self != 'undefined' && self && self.self == self
+		? self : Function('return this')();
+	}
+
+	var noConflict = globalScope.bigDecimal;
+	bigDecimal.noConflict = function () {
+		globalScope.bigDecimal = noConflict;
+		return bigDecimal;
+	};
+
+	globalScope.bigDecimal = bigDecimal;
+	}
+})(this);
