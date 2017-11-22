@@ -48,7 +48,8 @@ var bigInt=function(undefined){"use strict";var BASE=1e7,LOG_BASE=7,MAX_INT=9007
 	pow(value, other), pow(value), pow_base(value), exp(), sqr(), sqrt(), cube(), cbrt()	
 	*/
 	
-  var sigfigs=14; //doesnt do anything above 17
+  var sigfigs=17; //doesnt do anything above 17
+  var maxdig=Number.MAX_VALUE; //int from 0 to Number.MAX_VALUE; however if you're setting it below 9007199254740992 you should just use break_infinity.js
 	var LN10;
 	
 	//we need this lookup table because Math.pow(10, exponent) when exponent's absolute value is large is slightly inaccurate. you can fix it with the power of math... or just make a lookup table. faster AND simpler
@@ -60,20 +61,15 @@ var bigInt=function(undefined){"use strict";var BASE=1e7,LOG_BASE=7,MAX_INT=9007
 		normalize() {
 			//SAFETY: don't try to normalize non-numbers or we infinite loop
 			if (!Number.isFinite(this.mantissa)) return this;
-      //SAFETY: make sure exponent is a bigInt
-      this.exponent=bigInt(this.exponent);
-			while (Math.abs(this.mantissa) < 1 && this.mantissa != 0)
-			{
-				this.mantissa *= 10;
-				this.exponent = this.exponent.prev();
-			}
-			while (Math.abs(this.mantissa) >= 10)
-			{
-				this.mantissa /= 10;
-				this.exponent = this.exponent.next();
-			}
-			//SAFETY: turn negative 0 into 0 lol
-			if (this.mantissa == 0) { this.mantissa = 0; this.exponent = bigInt.zero; }
+
+			if (this.mantissa == 0) { this.mantissa = 0; this.exponent = bigInt[0]; return; }
+			if (this.mantissa >= 1 && this.mantissa < 10) { return; }
+			
+			var temp_exponent = bigInt(Math.floor(Math.log10(Math.abs(this.mantissa))));
+			this.mantissa = this.mantissa/powersof10[temp_exponent+indexof0inpowersof10];
+			this.exponent = temp_exponent.plus(this.exponent);
+		
+return this;
 
 			return this;
 		}
@@ -96,15 +92,13 @@ var bigInt=function(undefined){"use strict";var BASE=1e7,LOG_BASE=7,MAX_INT=9007
 		fromNumber(value) {
 			//SAFETY: Handle Infinity and NaN in a somewhat meaningful way.
 			if (Number.isNaN(value)) { this.mantissa = Number.NaN; this.exponent = Number.NaN; }
-			else if (value == Number.POSITIVE_INFINITY) { this.mantissa = 1.7977; this.exponent = bigInt(308); }
-			else if (value == Number.NEGATIVE_INFINITY) { this.mantissa = -1.7977; this.exponent = bigInt(308); }
-			else if (value == 0) { this.mantissa = 0; this.exponent = bigInt.zero; }
-			else
-			{
-				this.exponent = bigInt(Math.floor(Math.log10(Math.abs(value))));
-				this.mantissa = value/powersof10[this.exponent+indexof0inpowersof10];
-				this.normalize(); //SAFETY: Doing two abs and two comparisons is a small price to pay to prevent weirdness everywhere.
-			}
+			if (value == Number.POSITIVE_INFINITY) { this.mantissa = 1.7977; this.exponent = bigInt(308); }
+			if (value == Number.NEGATIVE_INFINITY) { this.mantissa = -1.7977; this.exponent = bigInt(308); }
+			if (value == 0) { this.mantissa = 0; this.exponent = bigInt.zero; }
+			
+			this.exponent = bigInt(Math.floor(Math.log10(Math.abs(value))));
+			this.mantissa = value/powersof10[this.exponent+indexof0inpowersof10];
+			this.normalize(); //SAFETY: Doing two abs and two comparisons is a small price to pay to prevent weirdness everywhere.
 			return this;
 		}
 		
@@ -124,7 +118,8 @@ var bigInt=function(undefined){"use strict";var BASE=1e7,LOG_BASE=7,MAX_INT=9007
 		}
 
 		fromValue(value) {
-			if (value instanceof Decimal || value instanceof bigDecimal) {
+		    if (value instanceof bigDecimal) return value;
+			if (value instanceof Decimal) {
 				return this.fromDecimal(value);
 			}
 			else if (typeof(value) == 'number') {
@@ -142,7 +137,8 @@ var bigInt=function(undefined){"use strict";var BASE=1e7,LOG_BASE=7,MAX_INT=9007
 		
 		constructor(value)
 		{
-			if (value instanceof Decimal || value instanceof bigDecimal) {
+			if (value instanceof bigDecimal) return ;
+			if (value instanceof Decimal) {
 				this.fromDecimal(value);
 			}
 			else if (typeof(value) == 'number') {
@@ -178,8 +174,8 @@ var bigInt=function(undefined){"use strict";var BASE=1e7,LOG_BASE=7,MAX_INT=9007
 		}
 		
 		toNumber() {
-      if (this.exponent.gt(308)) return Number.POSITIVE_INFINITY
-      if (this.exponent.lt(-308)) return Number.NEGATIVE_INFINITY
+          if (this.exponent.gt(308)) return Number.POSITIVE_INFINITY
+          if (this.exponent.lt(-308)) return Number.NEGATIVE_INFINITY
 			return this.mantissa*Math.pow(10, this.exponent);
 		}
 		
@@ -252,12 +248,13 @@ var bigInt=function(undefined){"use strict";var BASE=1e7,LOG_BASE=7,MAX_INT=9007
 		get e() { return this.exponent; }
 		set e(value) { this.exponent = bigInt(value); }
 		
+		
 		abs() {
 			return bigDecimal.fromMantissaExponent(Math.abs(this.mantissa), this.exponent);
 		}
 		
 		static abs(value) {
-			return fromValue(value).abs();
+			return bigDecimal.fromValue(value).abs();
 		}
 		
 		neg() {
@@ -265,7 +262,7 @@ var bigInt=function(undefined){"use strict";var BASE=1e7,LOG_BASE=7,MAX_INT=9007
 		}
 		
 		static neg(value) {
-			return fromValue(value).neg();
+			return bigDecimal.fromValue(value).neg();
 		}
 		
 		negate() {
@@ -273,7 +270,7 @@ var bigInt=function(undefined){"use strict";var BASE=1e7,LOG_BASE=7,MAX_INT=9007
 		}
 		
 		static negate(value) {
-      return fromValue(value).neg();
+      return bigDecimal.fromValue(value).neg();
 		}
 		
 		negated() {
@@ -281,7 +278,7 @@ var bigInt=function(undefined){"use strict";var BASE=1e7,LOG_BASE=7,MAX_INT=9007
 		}
 		
 		static negated(value) {
-			return fromValue(value).neg();
+			return bigDecimal.fromValue(value).neg();
 		}
 		
 		sign() {
@@ -289,7 +286,7 @@ var bigInt=function(undefined){"use strict";var BASE=1e7,LOG_BASE=7,MAX_INT=9007
 		}
 		
 		static sign(value) {
-			return fromValue(value).sign();
+			return bigDecimal.fromValue(value).sign();
 		}
 		
 		sgn() {
@@ -297,7 +294,7 @@ var bigInt=function(undefined){"use strict";var BASE=1e7,LOG_BASE=7,MAX_INT=9007
 		}
 		
 		static sgn(value) {
-			return fromValue(value).sign();
+			return bigDecimal.fromValue(value).sign();
 		}
 		
 		round() {
@@ -307,7 +304,7 @@ var bigInt=function(undefined){"use strict";var BASE=1e7,LOG_BASE=7,MAX_INT=9007
 		}
 		
 		static round(value) {
-			return fromValue(value).round();
+			return bigDecimal.fromValue(value).round();
 		}
 		
 		floor() {
@@ -317,7 +314,7 @@ var bigInt=function(undefined){"use strict";var BASE=1e7,LOG_BASE=7,MAX_INT=9007
 		}
 		
 		static floor(value) {
-			return fromValue(value).floor();
+			return bigDecimal.fromValue(value).floor();
 		}
 		
 		ceil() {
@@ -327,7 +324,7 @@ var bigInt=function(undefined){"use strict";var BASE=1e7,LOG_BASE=7,MAX_INT=9007
 		}
 		
 		static ceil(value) {
-			return fromValue(value).ceil();
+			return bigDecimal.fromValue(value).ceil();
 		}
 		
 		trunc() {
@@ -337,13 +334,13 @@ var bigInt=function(undefined){"use strict";var BASE=1e7,LOG_BASE=7,MAX_INT=9007
 		}
 		
 		static trunc(value) {
-			return fromValue(value).trunc();
+			return bigDecimal.fromValue(value).trunc();
 		}
 		
 		add(value) {
 			//figure out which is bigger, shrink the mantissa of the smaller by the difference in exponents, add mantissas, normalize and return
 			
-			value = fromValue(value);
+			value = bigDecimal.fromValue(value);
 			
 			if (this.mantissa == 0) { return value; }
 			if (value.mantissa == 0) { return this; }
@@ -370,7 +367,7 @@ var bigInt=function(undefined){"use strict";var BASE=1e7,LOG_BASE=7,MAX_INT=9007
 		}
 		
 		static add(value, other) {
-			return fromValue(value).add(other);
+			return bigDecimal.fromValue(value).add(other);
 		}
 		
 		plus(value) {
@@ -378,7 +375,7 @@ var bigInt=function(undefined){"use strict";var BASE=1e7,LOG_BASE=7,MAX_INT=9007
 		}
 		
 		static plus(value, other) {
-			return fromValue(value).add(other);
+			return bigDecimal.fromValue(value).add(other);
 		}
 		
 		sub(value) {
@@ -386,7 +383,7 @@ var bigInt=function(undefined){"use strict";var BASE=1e7,LOG_BASE=7,MAX_INT=9007
 		}
 		
 		static sub(value, other) {
-			return fromValue(value).sub(other);
+			return bigDecimal.fromValue(value).sub(other);
 		}
 		
 		subtract(value) {
@@ -394,7 +391,7 @@ var bigInt=function(undefined){"use strict";var BASE=1e7,LOG_BASE=7,MAX_INT=9007
 		}
 		
 		static subtract(value, other) {
-			return fromValue(value).sub(other);
+			return bigDecimal.fromValue(value).sub(other);
 		}
 		
 		minus(value) {
@@ -402,7 +399,7 @@ var bigInt=function(undefined){"use strict";var BASE=1e7,LOG_BASE=7,MAX_INT=9007
 		}
 		
 		static minus(value, other) {
-			return fromValue(value).sub(other);
+			return bigDecimal.fromValue(value).sub(other);
 		}
 		
 		mul(value) {
@@ -411,13 +408,13 @@ var bigInt=function(undefined){"use strict";var BASE=1e7,LOG_BASE=7,MAX_INT=9007
 			= a_1*a_2*10^(b_1+b_2)
 			*/
 		
-			value = fromValue(value);
+			value = bigDecimal.fromValue(value);
 
-			return Decimal.fromMantissaExponent(this.mantissa*value.mantissa, this.exponent.plus(value.exponent));
+			return bigDecimal.fromMantissaExponent(this.mantissa*value.mantissa, this.exponent.plus(value.exponent));
 		}
 		
 		static mul(value, other) {
-			return fromValue(value).mul(other);
+			return bigDecimal.fromValue(value).mul(other);
 		}
 		
 		multiply(value) {
@@ -425,7 +422,7 @@ var bigInt=function(undefined){"use strict";var BASE=1e7,LOG_BASE=7,MAX_INT=9007
 		}
 		
 		static multiply(value, other) {
-			return fromValue(value).mul(other);
+			return bigDecimal.fromValue(value).mul(other);
 		}
 		
 		times(value) {
@@ -433,15 +430,15 @@ var bigInt=function(undefined){"use strict";var BASE=1e7,LOG_BASE=7,MAX_INT=9007
 		}
 		
 		static times(value, other) {
-			return fromValue(value).mul(other);
+			return bigDecimal.fromValue(value).mul(other);
 		}
 		
 		div(value) {
-			return this.mul(fromValue(value).recip());
+			return this.mul(bigDecimal.fromValue(value).recip());
 		}
 		
 		static div(value, other) {
-			return fromValue(value).div(other);
+			return bigDecimal.fromValue(value).div(other);
 		}
 		
 		divide(value) {
@@ -449,7 +446,7 @@ var bigInt=function(undefined){"use strict";var BASE=1e7,LOG_BASE=7,MAX_INT=9007
 		}
 		
 		static divide(value, other) {
-			return fromValue(value).div(other);
+			return bigDecimal.fromValue(value).div(other);
 		}
 		
 		divideBy(value) { return this.div(value); }
@@ -460,7 +457,7 @@ var bigInt=function(undefined){"use strict";var BASE=1e7,LOG_BASE=7,MAX_INT=9007
 		}
 		
 		static recip(value) {
-			return fromValue(value).recip();
+			return bigDecimal.fromValue(value).recip();
 		}
 		
 		reciprocal() {
@@ -468,7 +465,7 @@ var bigInt=function(undefined){"use strict";var BASE=1e7,LOG_BASE=7,MAX_INT=9007
 		}
 		
 		static reciprocal(value) {
-      return fromValue(value).recip();
+      return bigDecimal.fromValue(value).recip();
 		}
 		
 		reciprocate() {
@@ -476,24 +473,24 @@ var bigInt=function(undefined){"use strict";var BASE=1e7,LOG_BASE=7,MAX_INT=9007
 		}
 		
 		static reciprocate(value) {
-			return fromValue(value).recip();
+			return bigDecimal.fromValue(value).recip();
 		}
 		
 		//-1 for less than value, 0 for equals value, 1 for greater than value
 		cmp(value) {
-		  value = fromValue(value);
+		  value = bigDecimal.fromValue(value);
 			
 			
 			if (this.mantissa == 0)
 			{
 				if (value.mantissa == 0) { return 0; }
 				if (value.mantissa < 0) { return 1; }
-				if (value.mantissa > 0) { return -1; }
+				return -1;
 			}
 			else if (value.mantissa == 0)
 			{
 				if (this.mantissa < 0) { return -1; }
-				if (this.mantissa > 0) { return 1; }
+				return 1;
 			}
 			
 			if (this.mantissa > 0) //positive
@@ -510,14 +507,14 @@ var bigInt=function(undefined){"use strict";var BASE=1e7,LOG_BASE=7,MAX_INT=9007
 				if (value.mantissa > 0) { return -1; }
 				if (this.exponent.gt(value.exponent)) { return -1; }
 				if (this.exponent.lt(value.exponent)) { return 1; }
-				if (this.mantissa > value.mantissa) { return -1; }
-				if (this.mantissa < value.mantissa) { return 1; }
+				if (this.mantissa > value.mantissa) { return 1; }
+				if (this.mantissa < value.mantissa) { return -1; }
 				return 0;
 			}
 		}
 		
 		static cmp(value, other) {
-			return fromValue(value).cmp(other);
+			return bigDecimal.fromValue(value).cmp(other);
 		}
 		
 		compare(value) {
@@ -525,7 +522,7 @@ var bigInt=function(undefined){"use strict";var BASE=1e7,LOG_BASE=7,MAX_INT=9007
 		}
 		
 		static compare(value, other) {
-			return fromValue(value).cmp(other);
+			return bigDecimal.fromValue(value).cmp(other);
 		}
 		
 		eq(value) {
@@ -533,7 +530,7 @@ var bigInt=function(undefined){"use strict";var BASE=1e7,LOG_BASE=7,MAX_INT=9007
 		}
 		
 		static eq(value, other) {
-			return fromValue(value).eq(other);
+			return bigDecimal.fromValue(value).eq(other);
 		}
 		
 		equals(value) {
@@ -541,7 +538,7 @@ var bigInt=function(undefined){"use strict";var BASE=1e7,LOG_BASE=7,MAX_INT=9007
 		}
 		
 		static equals(value, other) {
-			return fromValue(value).eq(other);
+			return bigDecimal.fromValue(value).eq(other);
 		}
 		
 		neq(value) {
@@ -549,7 +546,7 @@ var bigInt=function(undefined){"use strict";var BASE=1e7,LOG_BASE=7,MAX_INT=9007
 		}
 		
 		static neq(value, other) {
-      return fromValue(value).neq(other);
+      return bigDecimal.fromValue(value).neq(other);
 		}
 		
 		notEquals(value) {
@@ -557,7 +554,7 @@ var bigInt=function(undefined){"use strict";var BASE=1e7,LOG_BASE=7,MAX_INT=9007
 		}
 		
 		static notEquals(value, other) {
-      return fromValue(value).neq(other);
+      return bigDecimal.fromValue(value).neq(other);
 		}
 		
 		lt(value) {
@@ -565,7 +562,7 @@ var bigInt=function(undefined){"use strict";var BASE=1e7,LOG_BASE=7,MAX_INT=9007
 		}
 		
 		static lt(value, other) {
-			return fromValue(value).lt(other);
+			return bigDecimal.fromValue(value).lt(other);
 		}
 		
 		lte(value) {
@@ -573,7 +570,7 @@ var bigInt=function(undefined){"use strict";var BASE=1e7,LOG_BASE=7,MAX_INT=9007
 		}
 		
 		static lte(value, other) {
-			return fromValue(value).lte(other);
+			return bigDecimal.fromValue(value).lte(other);
 		}
 		
 		gt(value) {
@@ -581,7 +578,7 @@ var bigInt=function(undefined){"use strict";var BASE=1e7,LOG_BASE=7,MAX_INT=9007
 		}
 		
 		static gt(value, other) {
-			return fromValue(value).gt(other);
+			return bigDecimal.fromValue(value).gt(other);
 		}
 		
 		gte(value) {
@@ -589,27 +586,27 @@ var bigInt=function(undefined){"use strict";var BASE=1e7,LOG_BASE=7,MAX_INT=9007
 		}
 		
 		static gte(value, other) {
-			return fromValue(value).gte(other);
+			return bigDecimal.fromValue(value).gte(other);
 		}
 		
 		max(value) {
 			var discriminant = this.cmp(value);
 			if (discriminant >= 0) return this;
-			return fromValue(value);
+			return bigDecimal.fromValue(value);
 		}
 		
 		static max(value, other) {
-			return fromValue(value).max(other);
+			return bigDecimal.fromValue(value).max(other);
 		}
 		
 		min(value) {
 			var discriminant = this.cmp(value);
 			if (discriminant <= 0) return this;
-			return fromValue(value);
+			return bigDecimal.fromValue(value);
 		}
 		
 		static min(value, other) {
-			return fromValue(value).min(other);
+			return bigDecimal.fromValue(value).min(other);
 		}
 		
 		cmp_tolerance(value, tolerance) {
@@ -618,7 +615,7 @@ var bigInt=function(undefined){"use strict";var BASE=1e7,LOG_BASE=7,MAX_INT=9007
 		}
 		
 		static cmp_tolerance(value, other, tolerance) {
-			return fromValue(value).cmp_tolerance(other, tolerance);
+			return bigDecimal.fromValue(value).cmp_tolerance(other, tolerance);
 		}
 		
 		compare_tolerance(value, tolerance) {
@@ -626,12 +623,12 @@ var bigInt=function(undefined){"use strict";var BASE=1e7,LOG_BASE=7,MAX_INT=9007
 		}
 		
 		static compare_tolerance(value, other, tolerance) {
-			return fromValue(value).cmp_tolerance(other, tolerance);
+			return bigDecimal.fromValue(value).cmp_tolerance(other, tolerance);
 		}
 		
 		//tolerance is a relative tolerance, multiplied by the greater of the magnitudes of the two arguments. For example, if you put in 1e-9, then any number closer to the larger number than (larger number)*1e-9 will be considered equal.
 		eq_tolerance(value, tolerance) {
-			value = fromValue(value)
+			value = bigDecimal.fromValue(value)
 		
 			// https://stackoverflow.com/a/33024979
 			//return abs(a-b) <= tolerance * max(abs(a), abs(b))
@@ -643,7 +640,7 @@ var bigInt=function(undefined){"use strict";var BASE=1e7,LOG_BASE=7,MAX_INT=9007
 		}
 		
 		static eq_tolerance(value, other, tolerance) {
-			return fromValue(value).eq_tolerance(other, tolerance);
+			return bigDecimal.fromValue(value).eq_tolerance(other, tolerance);
 		}
 		
 		equals_tolerance(value, tolerance) {
@@ -651,7 +648,7 @@ var bigInt=function(undefined){"use strict";var BASE=1e7,LOG_BASE=7,MAX_INT=9007
 		}
 		
 		static equals_tolerance(value, other, tolerance) {
-			return fromValue(value).eq_tolerance(other, tolerance);
+			return bigDecimal.fromValue(value).eq_tolerance(other, tolerance);
 		}
 		
 		neq_tolerance(value, tolerance) {
@@ -659,7 +656,7 @@ var bigInt=function(undefined){"use strict";var BASE=1e7,LOG_BASE=7,MAX_INT=9007
 		}
 		
 		static neq_tolerance(value, other, tolerance) {
-			return fromValue(value).neq_tolerance(other, tolerance);
+			return bigDecimal.fromValue(value).neq_tolerance(other, tolerance);
 		}
 		
 		notEquals_tolerance(value, tolerance) {
@@ -667,7 +664,7 @@ var bigInt=function(undefined){"use strict";var BASE=1e7,LOG_BASE=7,MAX_INT=9007
 		}
 		
 		static notEquals_tolerance(value, other, tolerance) {
-			return fromValue(value).neq_tolerance(other, tolerance);
+			return bigDecimal.fromValue(value).neq_tolerance(other, tolerance);
 		}
 		
 		lt_tolerance(value, tolerance) {
@@ -676,7 +673,7 @@ var bigInt=function(undefined){"use strict";var BASE=1e7,LOG_BASE=7,MAX_INT=9007
 		}
 		
 		static lt_tolerance(value, other, tolerance) {
-			return fromValue(value).lt_tolerance(other, tolerance);
+			return bigDecimal.fromValue(value).lt_tolerance(other, tolerance);
 		}
 		
 		lte_tolerance(value, tolerance) {
@@ -685,7 +682,7 @@ var bigInt=function(undefined){"use strict";var BASE=1e7,LOG_BASE=7,MAX_INT=9007
 		}
 		
 		static lte_tolerance(value, other, tolerance) {
-			return fromValue(value).lte_tolerance(other, tolerance);
+			return bigDecimal.fromValue(value).lte_tolerance(other, tolerance);
 		}
 		
 		gt_tolerance(value, tolerance) {
@@ -694,7 +691,7 @@ var bigInt=function(undefined){"use strict";var BASE=1e7,LOG_BASE=7,MAX_INT=9007
 		}
 		
 		static gt_tolerance(value, other, tolerance) {
-			return fromValue(value).gt_tolerance(other, tolerance);
+			return bigDecimal.fromValue(value).gt_tolerance(other, tolerance);
 		}
 		
 		gte_tolerance(value, tolerance) {
@@ -703,7 +700,7 @@ var bigInt=function(undefined){"use strict";var BASE=1e7,LOG_BASE=7,MAX_INT=9007
 		}
 		
 		static gte_tolerance(value, other, tolerance) {
-			return fromValue(value).gte_tolerance(other, tolerance);
+			return bigDecimal.fromValue(value).gte_tolerance(other, tolerance);
 		}
 		
 		log10() {
@@ -715,7 +712,7 @@ var bigInt=function(undefined){"use strict";var BASE=1e7,LOG_BASE=7,MAX_INT=9007
 		}
 		
 		static log10(value) {
-			return fromValue(value).log10();
+			return bigDecimal.fromValue(value).log10();
 		}
 		
 		log(base) {
@@ -724,16 +721,16 @@ var bigInt=function(undefined){"use strict";var BASE=1e7,LOG_BASE=7,MAX_INT=9007
 		}
 		
 		static log(value, base) {
-			return fromValue(value).log(base);
+			return bigDecimal.fromValue(value).log(base);
 		}
 		
 		log2() {
-      if(this.exponent.gt(5e15)) return this.log10().times(3.32192809488736234787); //can prob be improved
+            if(this.exponent.gt(5e15)) { return this.log10().times(33219).divide(10000); }
 			return 3.32192809488736234787*this.log10();
 		}
 		
 		static log2(value) {
-			return fromValue(value).log2();
+			return bigDecimal.fromValue(value).log2();
 		}
 		
 		ln() {
@@ -741,7 +738,7 @@ var bigInt=function(undefined){"use strict";var BASE=1e7,LOG_BASE=7,MAX_INT=9007
 		}
 		
 		static ln(value) {
-			return fromValue(value).ln();
+			return bigDecimal.fromValue(value).ln();
 		}
 		
 		logarithm(base) {
@@ -749,34 +746,34 @@ var bigInt=function(undefined){"use strict";var BASE=1e7,LOG_BASE=7,MAX_INT=9007
 		}
 		
 		static logarithm(value, base) {
-			return fromValue(value).logarithm(base);
+			return bigDecimal.fromValue(value).logarithm(base);
 		}
 		
 		pow(value) {
 			//UN-SAFETY: We're assuming Decimal^number because number^Decimal or Decimal^Decimal is unheard of in incremental games.
 		
 			//Fast track: If (this.exponent*value) is an integer, we can do a very fast method.
-			if (Number.isInteger(this.exponent*value))
+			if (this.exponent*value < 1.8e53 && this.exponent*value > 1.8e-53)
 			{
 				var newMantissa = Math.pow(this.mantissa, value);
 				if (Number.isFinite(newMantissa))
 				{
-					return bigDecimal.fromMantissaExponent(newMantissa, this.exponent.times(value).plus(this.exponent.mod(value)));
+					return bigDecimal.fromMantissaExponent(newMantissa*((this.exponent*value)%1), bigInt(Math.trunc(this.exponent*value)));
 				}
 			}
 			
-      return Decimal.fromMantissaExponent(1, value*this.log10()); //unsure if thisll work, hopefully it does
+      return bigDecimal.pow(10,Math.trunc(value*this.log10())); //this absolutely doesnt work, but idk
 		}
 		
 		pow_base(value) {
-			return fromValue(value).pow(this);
+			return bigDecimal.fromValue(value).pow(this);
 		}
 		
 		static pow(value, other) {
 			//Fast track: 10^integer
 			if (value == 10 && (Number.isInteger(other) || other instanceof bigInt)) return Decimal.fromMantissaExponent(1, other);
 			
-			return fromValue(value).pow(other);
+			return bigDecimal.fromValue(value).pow(other);
 		}
 		
 		exp() {
@@ -785,7 +782,7 @@ var bigInt=function(undefined){"use strict";var BASE=1e7,LOG_BASE=7,MAX_INT=9007
 		}
 		
 		static exp(value) {
-			return fromValue(value).exp();
+			return bigDecimal.fromValue(value).exp();
 		}
 		
 		sqr() {
@@ -793,7 +790,7 @@ var bigInt=function(undefined){"use strict";var BASE=1e7,LOG_BASE=7,MAX_INT=9007
 		}
 		
 		static sqr(value) {
-			return fromValue(value).sqr();
+			return bigDecimal.fromValue(value).sqr();
 		}
 		
 		sqrt() {
@@ -801,7 +798,7 @@ var bigInt=function(undefined){"use strict";var BASE=1e7,LOG_BASE=7,MAX_INT=9007
 		}
 		
 		static sqrt(value) {
-			return fromValue(value).sqrt();
+			return bigDecimal.fromValue(value).sqrt();
 		}
 		
 		cube() {
@@ -809,7 +806,7 @@ var bigInt=function(undefined){"use strict";var BASE=1e7,LOG_BASE=7,MAX_INT=9007
 		}
 		
 		static cube(value) {
-			return fromValue(value).cube();
+			return bigDecimal.fromValue(value).cube();
 		}
 		
 		cbrt() {
@@ -817,7 +814,7 @@ var bigInt=function(undefined){"use strict";var BASE=1e7,LOG_BASE=7,MAX_INT=9007
 		}
 		
 		static cbrt(value) {
-			return fromValue(value).cbrt();
+			return bigDecimal.fromValue(value).cbrt();
 		}
 	}
 	
